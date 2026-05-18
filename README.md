@@ -34,5 +34,8 @@ Predictions:
                          [1.0, 3.0]])  # barely studied, barely slept
 ## and they were just right as expected 
 
+## the  neural network visualization looks like this : 
+
+<img width="1558" height="1320" alt="image" src="https://github.com/user-attachments/assets/707b1adb-d8f5-4862-ad43-120df1772d0c" />
 
   
