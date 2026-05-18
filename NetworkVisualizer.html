@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neural Network Visualizer</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Space+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: rgba(99,179,237,0.15);
+    --accent: #63b3ed;
+    --accent2: #f6ad55;
+    --pass: #68d391;
+    --fail: #fc8181;
+    --text: #e2e8f0;
+    --muted: #718096;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Space Grotesk', sans-serif; min-height: 100vh; overflow-x: hidden; }
+
+  .topbar {
+    display: flex; align-items: center; gap: 20px;
+    padding: 10px 24px; background: var(--surface);
+    border-bottom: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .topbar h1 { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; letter-spacing: 2px; color: var(--accent); white-space: nowrap; }
+  .stat { display: flex; flex-direction: column; }
+  .stat-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  .stat-val { font-family: 'JetBrains Mono', monospace; font-size: 17px; font-weight: 700; }
+  .stat-val.good { color: var(--pass); }
+  .divider { width: 1px; height: 32px; background: var(--border); flex-shrink: 0; }
+  .btn { padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text); font-family: 'Space Grotesk', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+  .btn:hover { background: var(--surface2); border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+  .btn.primary:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.35; cursor: default; pointer-events: none; }
+
+  .main { display: flex; height: calc(100vh - 53px); }
+
+  .sidebar {
+    width: 210px; min-width: 190px; background: var(--surface);
+    border-right: 1px solid var(--border); padding: 16px 14px;
+    display: flex; flex-direction: column; gap: 18px; overflow-y: auto;
+  }
+  .section-title { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .control { display: flex; flex-direction: column; gap: 5px; }
+  .control label { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; }
+  .control label .val { font-family: 'JetBrains Mono', monospace; color: var(--accent); }
+  input[type=range] { -webkit-appearance: none; width: 100%; height: 3px; background: var(--surface2); border-radius: 2px; outline: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%; background: var(--accent); cursor: pointer; }
+  input[type=number] { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 5px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; width: 100%; outline: none; }
+  input[type=number]:focus { border-color: var(--accent); }
+
+  .canvas-area { flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px; position: relative; overflow: hidden; background: radial-gradient(ellipse at center, #0d1525 0%, #0a0e1a 70%); }
+  #nnCanvas { display: block; }
+
+  .right-panel { width: 250px; min-width: 230px; background: var(--surface); border-left: 1px solid var(--border); padding: 16px 14px; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; }
+
+  #lossChart { width: 100%; height: 120px; display: block; }
+
+  .pred-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+  .pred-bar-wrap { width: 100%; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; margin: 8px 0; }
+  .pred-bar { height: 100%; border-radius: 3px; transition: width 0.3s, background 0.3s; width: 0%; background: var(--accent); }
+  .pred-label { font-family: 'JetBrains Mono', monospace; font-size: 19px; font-weight: 700; color: var(--muted); }
+  .pred-label.pass { color: var(--pass); }
+  .pred-label.fail { color: var(--fail); }
+  .pred-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .legend-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); margin-bottom: 5px; }
+  .w-grad { width: 70px; height: 5px; border-radius: 3px; background: linear-gradient(to right, #fc8181, #2d3748, #63b3ed); flex-shrink: 0; }
+
+  .progress-bar-wrap { position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: var(--surface2); }
+  .progress-bar { height: 100%; background: var(--accent); transition: width 0.1s; width: 0%; }
+
+  #dataTable { font-size: 11px; font-family: 'JetBrains Mono', monospace; display: flex; flex-direction: column; gap: 2px; max-height: 120px; overflow-y: auto; }
+  #actPanel { display: flex; flex-direction: column; gap: 5px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>NN VISUALIZER</h1>
+  <div class="divider"></div>
+  <div class="stat"><span class="stat-label">epoch</span><span class="stat-val" id="epochStat">0</span></div>
+  <div class="stat"><span class="stat-label">loss</span><span class="stat-val" id="lossStat">—</span></div>
+  <div class="stat"><span class="stat-label">accuracy</span><span class="stat-val good" id="accStat">—</span></div>
+  <div class="divider"></div>
+  <button class="btn primary" id="btnTrain">▶ Train</button>
+  <button class="btn" id="btnPause" disabled>⏸ Pause</button>
+  <button class="btn" id="btnReset">↺ Reset</button>
+  <div class="divider"></div>
+  <div class="stat"><span class="stat-label">architecture</span><span class="stat-val" style="font-size:12px;font-family:'JetBrains Mono',monospace">2 → 4 → 1</span></div>
+  <div class="stat"><span class="stat-label">dataset</span><span class="stat-val" style="font-size:12px;font-family:'JetBrains Mono',monospace">Student pass/fail</span></div>
+</div>
+
+<div class="main">
+
+  <div class="sidebar">
+    <div>
+      <div class="section-title">Training</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="control">
+          <label>Learning rate <span class="val" id="lrVal">0.01</span></label>
+          <input type="range" id="lrSlider" min="1" max="100" value="10">
+        </div>
+        <div class="control">
+          <label>Steps / frame <span class="val" id="spfVal">10</span></label>
+          <input type="range" id="spfSlider" min="1" max="100" value="10">
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Dataset</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="control">
+          <label>Points <span class="val" id="nPtsVal">8</span></label>
+          <input type="range" id="nPtsSlider" min="4" max="60" value="8">
+        </div>
+        <button class="btn" id="btnRegen" style="width:100%">↺ Regenerate</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Live prediction</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="control">
+          <label>Study hrs <span class="val" id="studyVal">3.0</span></label>
+          <input type="range" id="studySlider" min="0" max="10" value="3" step="0.1">
+        </div>
+        <div class="control">
+          <label>Sleep hrs <span class="val" id="sleepVal">6.0</span></label>
+          <input type="range" id="sleepSlider" min="0" max="10" value="6" step="0.1">
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Weight colors</div>
+      <div class="legend-row"><div class="w-grad"></div><span>negative → positive</span></div>
+      <div class="legend-row" style="margin-top:2px;font-size:10px">Thickness = magnitude</div>
+    </div>
+
+    <div>
+      <div class="section-title">Neuron colors</div>
+      <div class="legend-row"><div style="width:12px;height:12px;border-radius:50%;background:#63b3ed;flex-shrink:0"></div>high activation</div>
+      <div class="legend-row"><div style="width:12px;height:12px;border-radius:50%;background:#1a2235;flex-shrink:0;border:1px solid #63b3ed44"></div>low activation</div>
+    </div>
+  </div>
+
+  <div class="canvas-area">
+    <canvas id="nnCanvas"></canvas>
+    <div class="progress-bar-wrap"><div class="progress-bar" id="progressBar"></div></div>
+  </div>
+
+  <div class="right-panel">
+    <div>
+      <div class="section-title">Loss curve</div>
+      <canvas id="lossChart" role="img" aria-label="Training loss over epochs"></canvas>
+    </div>
+
+    <div>
+      <div class="section-title">Prediction</div>
+      <div class="pred-card">
+        <div class="pred-label" id="predLabel">—</div>
+        <div class="pred-bar-wrap"><div class="pred-bar" id="predBar"></div></div>
+        <div class="pred-sub" id="predSub">Train to activate</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Activations</div>
+      <div id="actPanel"><span style="color:var(--muted)">Not trained yet</span></div>
+    </div>
+
+    <div>
+      <div class="section-title">Training data</div>
+      <div id="dataTable"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Math ──────────────────────────────────────────────────────────
+const sigmoid=z=>1/(1+Math.exp(-z));
+const sigmoidP=z=>{const s=sigmoid(z);return s*(1-s);};
+const relu=z=>Math.max(0,z);
+const reluP=z=>z>0?1:0;
+function matMul(A,B){const r=A.length,k=A[0].length,c=B[0].length,C=Array.from({length:r},()=>new Array(c).fill(0));for(let i=0;i<r;i++)for(let j=0;j<c;j++)for(let l=0;l<k;l++)C[i][j]+=A[i][l]*B[l][j];return C;}
+function addBias(Z,b){return Z.map(row=>row.map((v,j)=>v+b[j]));}
+function applyFn(Z,fn){return Z.map(r=>r.map(fn));}
+function transpose(M){return M[0].map((_,j)=>M.map(r=>r[j]));}
+function randN(r,c){return Array.from({length:r},()=>Array.from({length:c},()=>(Math.random()*2-1)*0.5));}
+
+// ── Neural Network ────────────────────────────────────────────────
+class NN{
+  constructor(){this.reset();}
+  reset(){this.W=[randN(2,4),randN(4,1)];this.b=[[0,0,0,0],[0]];this.acts=[];this.zs=[];}
+  forward(X){
+    let A=X;this.acts=[A];this.zs=[];
+    const fns=[relu,sigmoid];
+    for(let i=0;i<this.W.length;i++){
+      const Z=addBias(matMul(A,this.W[i]),this.b[i]);
+      this.zs.push(Z);A=applyFn(Z,fns[i]);this.acts.push(A);
+    }
+    return A;
+  }
+  backward(X,y,lr){
+    const m=X.length;
+    let delta=this.acts[2].map((row,i)=>row.map((v,j)=>v-y[i][j]));
+    for(let l=1;l>=0;l--){
+      const isLast=l===1;
+      const dZ=delta.map((row,i)=>row.map((v,j)=>v*(isLast?sigmoidP(this.zs[l][i][j]):reluP(this.zs[l][i][j]))));
+      const AT=transpose(this.acts[l]);
+      const dW=matMul(AT,dZ);
+      const db=dZ.reduce((acc,row)=>row.map((v,j)=>acc[j]+v),new Array(this.b[l].length).fill(0));
+      if(l>0){delta=matMul(dZ,transpose(this.W[l]));}
+      for(let r=0;r<this.W[l].length;r++)for(let c=0;c<this.W[l][0].length;c++)this.W[l][r][c]-=lr*dW[r][c]/m;
+      for(let c=0;c<this.b[l].length;c++)this.b[l][c]-=lr*db[c]/m;
+    }
+  }
+  loss(X,y){
+    const pred=this.forward(X);let s=0;
+    for(let i=0;i<X.length;i++){const p=Math.max(1e-9,Math.min(1-1e-9,pred[i][0]));s+=-y[i][0]*Math.log(p)-(1-y[i][0])*Math.log(1-p);}
+    return s/X.length;
+  }
+  accuracy(X,y){const pred=this.forward(X);return pred.filter((r,i)=>(r[0]>0.5?1:0)===y[i][0]).length/X.length;}
+  predict1(study,sleep){return this.forward([[study,sleep]])[0][0];}
+}
+
+// ── Data ──────────────────────────────────────────────────────────
+function genData(n=8){
+  return Array.from({length:n},()=>{
+    const study=parseFloat((Math.random()*8+0.5).toFixed(1));
+    const sleep=parseFloat((Math.random()*7+2).toFixed(1));
+    const score=study*0.5+sleep*0.3+Math.random()*1.5;
+    return{study,sleep,pass:score>5?1:0};
+  });
+}
+
+let data=genData(8),nn=new NN(),epoch=0,running=false,rafId=null;
+const lossHist=[];
+
+// ── Canvases ──────────────────────────────────────────────────────
+const canvas=document.getElementById('nnCanvas'),ctx=canvas.getContext('2d');
+const lossCanv=document.getElementById('lossChart'),lossCtx=lossCanv.getContext('2d');
+
+function resize(){
+  const area=canvas.parentElement;
+  const sz=Math.min(area.clientWidth-32,area.clientHeight-32,720);
+  canvas.width=sz;canvas.height=sz;
+  lossCanv.width=lossCanv.parentElement.clientWidth-2;
+  lossCanv.height=120;
+  drawNN();drawLoss();
+}
+window.addEventListener('resize',resize);
+
+// ── Draw NN ───────────────────────────────────────────────────────
+const ARCH=[{n:2,lbl:['INPUT','2 features']},{n:4,lbl:['HIDDEN','4 neurons']},{n:1,lbl:['OUTPUT','1 class']}];
+
+function nodePos(W,H,li,ni){
+  const px=W*0.13,py=H*0.13;
+  const x=px+li*(W-2*px)/(ARCH.length-1);
+  const n=ARCH[li].n;
+  const y=n===1?H/2:py+ni*(H-2*py)/(n-1);
+  return{x,y};
+}
+
+function actColor(v){
+  v=Math.min(1,Math.max(0,v));
+  return`rgb(${Math.round(26+v*73)},${Math.round(32+v*147)},${Math.round(78+v*159)})`;
+}
+
+function wColor(w){
+  const t=Math.min(1,Math.max(0,(w+1)/2));
+  const r=Math.round(252*(1-t)+99*t),g=Math.round(129*(1-t)+179*t),b=Math.round(74*(1-t)+237*t);
+  return`rgba(${r},${g},${b},${Math.min(1,Math.abs(w)+0.15)})`;
+}
+
+function drawNN(){
+  const W=canvas.width,H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  const R=Math.max(16,Math.min(26,W*0.038));
+  const acts=nn.acts;
+
+  // weights
+  for(let l=0;l<ARCH.length-1;l++){
+    for(let j=0;j<ARCH[l].n;j++){
+      for(let k=0;k<ARCH[l+1].n;k++){
+        const w=nn.W[l][j][k];
+        const p1=nodePos(W,H,l,j),p2=nodePos(W,H,l+1,k);
+        ctx.strokeStyle=wColor(w);
+        ctx.lineWidth=Math.min(4.5,Math.abs(w)*2.2+0.3);
+        ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);ctx.stroke();
+      }
+    }
+  }
+
+  // nodes
+  for(let l=0;l<ARCH.length;l++){
+    for(let j=0;j<ARCH[l].n;j++){
+      const{x,y}=nodePos(W,H,l,j);
+      let av=0.2;
+      if(acts.length>l&&acts[l]?.[0]) av=Math.min(1,Math.max(0,acts[l][0][j]||0));
+
+      // glow
+      const g=ctx.createRadialGradient(x,y,0,x,y,R*2);
+      g.addColorStop(0,`rgba(99,179,237,${av*0.3})`);
+      g.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.beginPath();ctx.arc(x,y,R*2,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+
+      // circle
+      ctx.beginPath();ctx.arc(x,y,R,0,Math.PI*2);
+      ctx.fillStyle=actColor(av);ctx.fill();
+      ctx.strokeStyle=`rgba(99,179,237,${0.3+av*0.5})`;
+      ctx.lineWidth=1.5;ctx.stroke();
+
+      // value
+      ctx.fillStyle='rgba(226,232,240,0.95)';
+      ctx.font=`600 ${Math.round(R*0.52)}px JetBrains Mono,monospace`;
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(av.toFixed(2),x,y);
+    }
+  }
+
+  // layer labels
+  const fs=Math.round(W*0.019);
+  for(let l=0;l<ARCH.length;l++){
+    const{x}=nodePos(W,H,l,0);
+    ctx.textAlign='center';
+    ctx.fillStyle='rgba(113,128,150,0.9)';ctx.font=`500 ${fs}px Space Grotesk,sans-serif`;
+    ctx.fillText(ARCH[l].lbl[0],x,H*0.045);
+    ctx.fillStyle='rgba(99,179,237,0.65)';ctx.font=`400 ${fs-1}px Space Grotesk,sans-serif`;
+    ctx.fillText(ARCH[l].lbl[1],x,H*0.045+fs+2);
+  }
+
+  // input labels
+  ['Study hrs','Sleep hrs'].forEach((lbl,j)=>{
+    const{x,y}=nodePos(W,H,0,j);
+    ctx.textAlign='right';ctx.fillStyle='rgba(113,128,150,0.8)';
+    ctx.font=`12px Space Grotesk,sans-serif`;ctx.fillText(lbl,x-R-8,y+1);
+  });
+
+  // output verdict
+  {
+    const{x,y}=nodePos(W,H,2,0);
+    const p=acts.length>2&&acts[2]?.[0]?acts[2][0][0]:null;
+    ctx.textAlign='left';
+    ctx.font=`bold 13px Space Grotesk,sans-serif`;
+    if(p===null){ctx.fillStyle='rgba(113,128,150,0.6)';ctx.fillText('output',x+R+10,y);}
+    else{ctx.fillStyle=p>0.5?'#68d391':'#fc8181';ctx.fillText(p>0.5?'PASS ✓':'FAIL ✗',x+R+10,y);}
+  }
+}
+
+// ── Draw Loss Chart ───────────────────────────────────────────────
+function drawLoss(){
+  const W=lossCanv.width,H=lossCanv.height;
+  lossCtx.clearRect(0,0,W,H);
+  if(lossHist.length<2){
+    lossCtx.fillStyle='rgba(113,128,150,0.4)';lossCtx.font='12px Space Grotesk';
+    lossCtx.textAlign='center';lossCtx.textBaseline='middle';
+    lossCtx.fillText('Train to see loss curve',W/2,H/2);return;
+  }
+  const pad=14,mx=Math.max(...lossHist)*1.05,mn=Math.min(...lossHist)*0.95,rng=mx-mn||1;
+  lossCtx.strokeStyle='rgba(99,179,237,0.1)';lossCtx.lineWidth=1;
+  [0,0.33,0.66,1].forEach(t=>{const yy=pad+t*(H-2*pad);lossCtx.beginPath();lossCtx.moveTo(pad,yy);lossCtx.lineTo(W-pad,yy);lossCtx.stroke();});
+  lossCtx.beginPath();lossCtx.strokeStyle='#63b3ed';lossCtx.lineWidth=2;
+  lossHist.forEach((v,i)=>{
+    const x=pad+i*(W-2*pad)/(lossHist.length-1),y=pad+(1-(v-mn)/rng)*(H-2*pad);
+    i===0?lossCtx.moveTo(x,y):lossCtx.lineTo(x,y);
+  });
+  lossCtx.stroke();
+  lossCtx.fillStyle='rgba(113,128,150,0.7)';lossCtx.font='9px JetBrains Mono';lossCtx.textAlign='left';
+  lossCtx.textBaseline='top';lossCtx.fillText(mx.toFixed(3),pad,pad);
+  lossCtx.textBaseline='bottom';lossCtx.fillText(mn.toFixed(3),pad,H-pad);
+}
+
+// ── Update prediction panel ───────────────────────────────────────
+function updatePrediction(){
+  const study=parseFloat(document.getElementById('studySlider').value);
+  const sleep=parseFloat(document.getElementById('sleepSlider').value);
+  document.getElementById('studyVal').textContent=study.toFixed(1);
+  document.getElementById('sleepVal').textContent=sleep.toFixed(1);
+  if(epoch===0)return;
+  const p=nn.predict1(study,sleep);
+  const pct=Math.round(p*100);
+  const el=document.getElementById('predLabel');
+  el.textContent=`${p>0.5?'PASS':'FAIL'} — ${pct}%`;
+  el.className='pred-label '+(p>0.5?'pass':'fail');
+  document.getElementById('predBar').style.width=pct+'%';
+  document.getElementById('predBar').style.background=p>0.5?'var(--pass)':'var(--fail)';
+  document.getElementById('predSub').textContent=`Study: ${study}h  |  Sleep: ${sleep}h`;
+  // act panel
+  const la=nn.acts;
+  const layerNames=['Input','Hidden','Output'];
+  let html='';
+  la.forEach((layer,li)=>{
+    html+=`<div style="color:var(--accent);margin-top:${li?6:0}px;margin-bottom:2px;font-size:10px;letter-spacing:1px;text-transform:uppercase">${layerNames[li]}</div>`;
+    (layer[0]||[]).forEach((v,ni)=>{
+      const pct2=Math.round(Math.min(1,Math.max(0,v))*100);
+      html+=`<div style="display:flex;align-items:center;gap:6px">
+        <span style="color:var(--muted);min-width:16px;font-size:10px">N${ni+1}</span>
+        <div style="flex:1;height:3px;background:var(--surface2);border-radius:2px"><div style="width:${pct2}%;height:100%;background:var(--accent);border-radius:2px;transition:width .3s"></div></div>
+        <span style="min-width:40px;color:var(--text);font-size:11px">${v.toFixed(3)}</span>
+      </div>`;
+    });
+  });
+  document.getElementById('actPanel').innerHTML=html;
+}
+
+function renderDataTable(){
+  document.getElementById('dataTable').innerHTML=data.map((d,i)=>
+    `<div style="display:flex;gap:6px;padding:2px 0;border-bottom:1px solid rgba(99,179,237,0.07)">
+      <span style="color:var(--muted);min-width:16px">${i+1}</span>
+      <span style="color:var(--accent)">${d.study}h📚</span>
+      <span style="color:var(--accent)">${d.sleep}h💤</span>
+      <span style="color:${d.pass?'var(--pass)':'var(--fail)'};margin-left:auto">${d.pass?'PASS':'FAIL'}</span>
+    </div>`
+  ).join('');
+}
+
+function getTensors(){return{X:data.map(d=>[d.study,d.sleep]),y:data.map(d=>[d.pass])};}
+
+// ── Training loop ─────────────────────────────────────────────────
+function step(){
+  const lr=parseFloat(document.getElementById('lrVal').textContent);
+  const spf=parseInt(document.getElementById('spfVal').textContent);
+  const{X,y}=getTensors();
+  for(let i=0;i<spf;i++){nn.forward(X);nn.backward(X,y,lr);}
+  epoch+=spf;
+  const loss=nn.loss(X,y),acc=nn.accuracy(X,y);
+  lossHist.push(+loss.toFixed(4));
+  if(lossHist.length>300)lossHist.shift();
+  document.getElementById('epochStat').textContent=epoch.toLocaleString();
+  document.getElementById('lossStat').textContent=loss.toFixed(4);
+  document.getElementById('accStat').textContent=(acc*100).toFixed(0)+'%';
+  document.getElementById('progressBar').style.width=Math.min(100,(epoch/5000)*100)+'%';
+  const study=parseFloat(document.getElementById('studySlider').value);
+  const sleep=parseFloat(document.getElementById('sleepSlider').value);
+  nn.predict1(study,sleep);
+  drawNN();drawLoss();updatePrediction();
+  if(running)rafId=requestAnimationFrame(step);
+}
+
+// ── Controls ──────────────────────────────────────────────────────
+document.getElementById('btnTrain').onclick=()=>{
+  running=true;
+  document.getElementById('btnTrain').disabled=true;
+  document.getElementById('btnPause').disabled=false;
+  rafId=requestAnimationFrame(step);
+};
+document.getElementById('btnPause').onclick=()=>{
+  running=false;cancelAnimationFrame(rafId);
+  document.getElementById('btnTrain').disabled=false;
+  document.getElementById('btnPause').disabled=true;
+};
+document.getElementById('btnReset').onclick=()=>{
+  running=false;cancelAnimationFrame(rafId);
+  nn.reset();epoch=0;lossHist.length=0;
+  ['epochStat','lossStat','accStat'].forEach(id=>document.getElementById(id).textContent=id==='epochStat'?'0':'—');
+  document.getElementById('predLabel').textContent='—';
+  document.getElementById('predLabel').className='pred-label';
+  document.getElementById('predBar').style.width='0%';
+  document.getElementById('predSub').textContent='Train to activate';
+  document.getElementById('actPanel').innerHTML='<span style="color:var(--muted)">Not trained yet</span>';
+  document.getElementById('progressBar').style.width='0%';
+  document.getElementById('btnTrain').disabled=false;
+  document.getElementById('btnPause').disabled=true;
+  const{X}=getTensors();nn.forward(X);drawNN();drawLoss();
+};
+document.getElementById('btnRegen').onclick=()=>{
+  const n=parseInt(document.getElementById('nPtsVal').textContent)||8;
+  data=genData(Math.max(4,Math.min(60,n)));
+  renderDataTable();document.getElementById('btnReset').click();
+};
+document.getElementById('lrSlider').oninput=e=>document.getElementById('lrVal').textContent=(parseInt(e.target.value)/100).toFixed(2);
+document.getElementById('spfSlider').oninput=e=>document.getElementById('spfVal').textContent=e.target.value;
+document.getElementById('nPtsSlider').oninput=e=>document.getElementById('nPtsVal').textContent=e.target.value;
+document.getElementById('studySlider').oninput=updatePrediction;
+document.getElementById('sleepSlider').oninput=updatePrediction;
+
+// ── Init ──────────────────────────────────────────────────────────
+renderDataTable();
+resize();
+const{X}=getTensors();nn.forward(X);drawNN();
+</script>
+</body>
+</html>
